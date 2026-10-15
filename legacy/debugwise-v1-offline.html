@@ -1,0 +1,1058 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>[hidden]{display:none!important}</style></head><body>
+<title>DebugWise AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: lab-notebook workspace. Evidence column (brief, original code, failure) stays pinned on the left; the debugging workflow runs down the right. */
+:root{
+  --bg:#EDF1F4; --surface:#FFFFFF; --sunken:#F5F7F9; --ink:#14222B; --muted:#5B6C76; --line:#D2DBE1;
+  --accent:#2550A0; --accent-soft:#E3EAF7; --marker:#F3D75E; --marker-soft:#FBF1C4;
+  --ok:#2C7A4B; --ok-soft:#DFF1E6; --warn:#A8691A; --warn-soft:#FBEBD3; --bad:#B23A3A; --bad-soft:#F8E1E1;
+  --code-bg:#F4F6F8; --code-ink:#1C2B34; --ln:#9AA9B2;
+  --f-display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --r:8px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F161B; --surface:#162028; --sunken:#121B21; --ink:#E2E9ED; --muted:#93A3AD; --line:#2A3843;
+  --accent:#86A8EC; --accent-soft:#1E2C45; --marker:#D6B843; --marker-soft:#3A3318;
+  --ok:#6CC892; --ok-soft:#173326; --warn:#E3A857; --warn-soft:#3A2A14; --bad:#EE8080; --bad-soft:#3D1D1F;
+  --code-bg:#0C1317; --code-ink:#D6E0E6; --ln:#5A6A74; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F161B; --surface:#162028; --sunken:#121B21; --ink:#E2E9ED; --muted:#93A3AD; --line:#2A3843;
+  --accent:#86A8EC; --accent-soft:#1E2C45; --marker:#D6B843; --marker-soft:#3A3318;
+  --ok:#6CC892; --ok-soft:#173326; --warn:#E3A857; --warn-soft:#3A2A14; --bad:#EE8080; --bad-soft:#3D1D1F;
+  --code-bg:#0C1317; --code-ink:#D6E0E6; --ln:#5A6A74; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;margin:0}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.2}
+h2{font-size:1.2rem}
+h3{font-size:1rem}
+p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1320px;margin:0 auto;padding-inline:16px}
+.label{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.muted{color:var(--muted)}
+.small{font-size:.85rem}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-block:10px}
+.brand{display:flex;align-items:baseline;gap:8px;margin-right:auto}
+.brand h1{font-size:1.35rem;letter-spacing:-.01em}
+.brand h1 span{background:linear-gradient(transparent 58%,var(--marker) 58%);padding:0 2px}
+.brand small{color:var(--muted);font-size:.8rem}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:var(--sunken)}
+.seg button{border:0;background:none;padding:5px 14px;border-radius:999px;cursor:pointer;font-weight:500;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.pill .dot{width:8px;height:8px;border-radius:50%;background:var(--ln)}
+.pill.live .dot{background:var(--ok)}
+.pill.demo .dot{background:var(--warn)}
+
+/* buttons & fields */
+.btn{border:1px solid var(--line);background:var(--surface);padding:7px 14px;border-radius:var(--r);cursor:pointer;font-weight:500;font-size:.9rem;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{background:none;border-color:transparent;color:var(--accent);padding-inline:6px}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+textarea,input[type=text],select{width:100%;background:var(--sunken);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px}
+textarea{resize:vertical;min-height:72px}
+textarea.code{font-family:var(--f-mono);font-size:.85rem;line-height:1.6;min-height:220px;background:var(--code-bg);color:var(--code-ink);tab-size:2;white-space:pre;overflow:auto}
+.field{display:grid;gap:4px}
+.field>span{font-size:.85rem;font-weight:500}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>.grow{flex:1 1 220px;min-width:0}
+
+/* student layout */
+.taskbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding-block:16px 10px}
+.taskbar select{width:auto;min-width:0;max-width:100%;font-weight:600}
+.steps{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto}
+.steps a{display:inline-flex;align-items:center;gap:5px;font-size:.78rem;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);text-decoration:none;background:var(--surface)}
+.steps a b{font-family:var(--f-mono);font-weight:500}
+.steps a.done{border-color:var(--ok);color:var(--ok);background:var(--ok-soft)}
+.grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:20px;align-items:start;padding-bottom:48px}
+@media (max-width:920px){.grid{grid-template-columns:minmax(0,1fr)}}
+.evidence{position:sticky;top:calc(env(safe-area-inset-top,0px) + 70px);display:grid;gap:14px;max-height:calc(100vh - 90px);overflow:auto;padding-right:2px}
+@media (max-width:920px){.evidence{position:static;max-height:none}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:10px;min-width:0}
+.brief dl{display:grid;gap:8px;margin:0}
+.brief dt{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.brief dd{margin:0}
+.brief ul{margin:0;padding-left:18px}
+.codeview{background:var(--code-bg);color:var(--code-ink);border-radius:var(--r);font-family:var(--f-mono);font-size:.84rem;line-height:1.6;overflow-x:auto;padding:10px 0;margin:0}
+.codeview .ln{display:flex;white-space:pre;padding-right:12px}
+.codeview .ln i{font-style:normal;color:var(--ln);width:2.6em;text-align:right;padding-right:12px;flex:none;user-select:none}
+.term{background:var(--code-bg);color:var(--code-ink);border-radius:var(--r);font-family:var(--f-mono);font-size:.82rem;padding:10px 12px;white-space:pre-wrap;word-break:break-word;margin:0}
+.term .err{color:var(--bad)}
+.term .okc{color:var(--ok)}
+.term .dim{color:var(--ln)}
+
+.flow{display:grid;gap:16px;min-width:0}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:12px;min-width:0;scroll-margin-top:90px}
+.step header{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.step header .num{font-family:var(--f-mono);font-size:.8rem;color:var(--accent);font-weight:500}
+.step header p{flex-basis:100%;color:var(--muted);font-size:.9rem}
+.step.locked{opacity:.6}
+.log{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.log li{border-left:3px solid var(--line);padding:4px 0 4px 10px;font-size:.9rem}
+.log li.hyp{border-color:var(--marker)}
+.log li .meta{font-size:.75rem;color:var(--muted)}
+.hl{background:var(--marker-soft);padding:0 3px;border-radius:3px}
+
+/* ladder */
+.ladder{display:grid;gap:8px}
+.rung{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:grid;gap:8px;background:var(--sunken)}
+.rung.open{background:var(--surface);border-color:var(--accent)}
+.rung h3{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.rung h3 .lvl{font-family:var(--f-mono);font-size:.75rem;color:var(--accent);border:1px solid currentColor;border-radius:4px;padding:0 5px}
+.checks{list-style:none;padding:0;margin:0;display:grid;gap:3px;font-size:.86rem}
+.checks li::before{content:"○ ";color:var(--muted)}
+.checks li.met::before{content:"● ";color:var(--ok)}
+.checks li.met{color:var(--ok)}
+.chip{display:inline-flex;align-items:center;font-size:.74rem;font-weight:600;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.chip.info{background:var(--accent-soft);color:var(--accent)}
+.notice{border-radius:var(--r);padding:10px 12px;font-size:.88rem}
+.notice.warn{background:var(--warn-soft);color:var(--ink);border-left:3px solid var(--warn)}
+.notice.info{background:var(--accent-soft);border-left:3px solid var(--accent)}
+.notice.bad{background:var(--bad-soft);border-left:3px solid var(--bad)}
+.notice.ok{background:var(--ok-soft);border-left:3px solid var(--ok)}
+
+table{border-collapse:collapse;width:100%;font-size:.86rem}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td.mono{font-family:var(--f-mono);font-size:.82rem;word-break:break-word}
+.scroll-x{overflow-x:auto}
+
+/* teacher */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-block:16px 16px;flex-wrap:wrap}
+.tabs button{border:0;background:none;padding:8px 14px;cursor:pointer;color:var(--muted);font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-selected="true"]{color:var(--ink);border-color:var(--accent)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.stat b{display:block;font-family:var(--f-display);font-size:1.6rem;font-variant-numeric:tabular-nums}
+.tgrid{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,7fr);gap:20px;align-items:start;padding-bottom:48px}
+@media (max-width:920px){.tgrid{grid-template-columns:minmax(0,1fr)}}
+.reclist{display:grid;gap:8px}
+.rec{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;text-align:left;cursor:pointer;display:grid;gap:6px;width:100%}
+.rec[aria-current="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.rec .top-line{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.rec .chips{display:flex;gap:4px;flex-wrap:wrap}
+.timeline{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.timeline li{display:grid;grid-template-columns:62px minmax(0,1fr);gap:10px;font-size:.9rem}
+.timeline .t{font-family:var(--f-mono);font-size:.78rem;color:var(--muted);padding-top:2px}
+.timeline .kind{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;font-weight:600}
+.k-hyp{color:var(--warn)} .k-exp{color:var(--accent)} .k-hint{color:var(--bad)} .k-test{color:var(--ok)}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+@media (max-width:640px){.two{grid-template-columns:minmax(0,1fr)}}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:.88rem;z-index:20}
+.example-tag{font-size:.7rem;font-weight:600;color:var(--muted);border:1px dashed var(--muted);border-radius:4px;padding:0 5px}
+@media (prefers-reduced-motion:no-preference){.rung.open{animation:rise .25s ease-out}@keyframes rise{from{transform:translateY(4px)}to{transform:none}}}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><h1><span>DebugWise</span> AI</h1><small>diagnose first, fix second</small></div>
+    <div class="seg" role="group" aria-label="View as">
+      <button id="roleStudent" aria-pressed="true">Student</button>
+      <button id="roleTeacher" aria-pressed="false">Teacher</button>
+    </div>
+    <span class="pill" id="aiPill" title="Where hints come from"><span class="dot"></span><span id="aiPillText">Connecting to Claude…</span></span>
+  </div>
+</header>
+
+<!-- ============ STUDENT VIEW ============ -->
+<main id="studentView" class="wrap">
+  <div class="taskbar">
+    <label class="label" for="taskSel">Task</label>
+    <select id="taskSel"></select>
+    <button class="btn ghost small" id="resetTask">Start over</button>
+    <nav class="steps" id="steps" aria-label="Progress"></nav>
+  </div>
+
+  <div class="grid">
+    <aside class="evidence" aria-label="Evidence">
+      <section class="panel brief" id="brief"></section>
+      <section class="panel">
+        <div class="row" style="justify-content:space-between"><h3>Original code</h3><span class="chip info">read-only · always visible</span></div>
+        <pre class="codeview" id="origCode"></pre>
+      </section>
+      <section class="panel">
+        <h3>Observed failure</h3>
+        <pre class="term" id="failOut">Running…</pre>
+      </section>
+    </aside>
+
+    <div class="flow">
+      <section class="step" id="s1">
+        <header><span class="num">Step 1</span><h2>Write your hypothesis</h2>
+          <p>Before asking for help, say what you think is wrong and why. Use the pattern “I think the bug is … because …”. You need a new hypothesis before each hint.</p></header>
+        <label class="field"><span>Your hypothesis</span>
+          <textarea id="hypText" placeholder="I think the bug is on line … because when the loop runs, the variable … has the value …"></textarea></label>
+        <div class="row"><button class="btn primary" id="hypSave">Save hypothesis</button><span class="small muted" id="hypMsg"></span></div>
+        <ol class="log" id="hypList"></ol>
+      </section>
+
+      <section class="step" id="s2">
+        <header><span class="num">Step 2</span><h2>Run a small experiment</h2>
+          <p>Call the function with an input you choose, predict the result, then note what the result tells you. Add <code>console.log(…)</code> to your revision to trace values.</p></header>
+        <div class="row">
+          <label class="field" style="flex:0 0 auto"><span>Run against</span>
+            <select id="expTarget"><option value="orig">Original code</option><option value="rev">My revision</option></select></label>
+          <label class="field grow"><span>Call</span><input type="text" id="expCall" class="mono" spellcheck="false"></label>
+        </div>
+        <label class="field"><span>I expect the result to be…</span><input type="text" id="expExpect" placeholder="e.g. 90, or an error"></label>
+        <div class="row"><button class="btn" id="expRun">Run experiment</button></div>
+        <pre class="term" id="expOut" hidden></pre>
+        <div id="expNoteWrap" hidden class="field">
+          <label class="field"><span>What does this result tell you?</span>
+            <textarea id="expNote" placeholder="The result was … which means …"></textarea></label>
+          <div class="row"><button class="btn primary" id="expLog">Log experiment</button><span class="small muted" id="expMsg"></span></div>
+        </div>
+        <ol class="log" id="expList"></ol>
+      </section>
+
+      <section class="step" id="s3">
+        <header><span class="num">Step 3</span><h2>Support ladder</h2>
+          <p>Help comes one level at a time. Each level unlocks after a new hypothesis and a new logged experiment. DebugWise will not rewrite your program.</p></header>
+        <div class="ladder" id="ladder"></div>
+      </section>
+
+      <section class="step" id="s4">
+        <header><span class="num">Step 4</span><h2>Revise and test</h2>
+          <p>Edit your copy of the code. The original stays on the left so you can compare.</p></header>
+        <textarea class="code" id="revCode" spellcheck="false" aria-label="Revised code"></textarea>
+        <div class="row"><button class="btn primary" id="runTests">Run tests</button><button class="btn ghost" id="revReset">Reset to original</button><span class="small muted" id="testSummary"></span></div>
+        <div class="scroll-x" id="testOut"></div>
+      </section>
+
+      <section class="step" id="s5">
+        <header><span class="num">Step 5</span><h2>Explain the bug in your own words</h2>
+          <p>Why did the original program fail? Describe what was happening to the program’s state, not only what you changed.</p></header>
+        <textarea id="explText" placeholder="The original failed because … When the program ran, … had the value … so …"></textarea>
+        <div class="row"><button class="btn" id="explCheck">Get feedback on my explanation</button><span class="small muted" id="explMsg"></span></div>
+        <div id="explFb"></div>
+      </section>
+
+      <section class="step" id="s6">
+        <header><span class="num">Step 6</span><h2>Transfer: same principle, new code</h2>
+          <p>Predict what this new code does before you run it, then say which debugging principle applies.</p></header>
+        <div id="transferBody"></div>
+      </section>
+
+      <section class="step" id="s7">
+        <header><span class="num">Step 7</span><h2>Reflect</h2></header>
+        <label class="field"><span>What was your first guess, and how did your experiments change it?</span><textarea id="ref1"></textarea></label>
+        <label class="field"><span>Which hint level did you need, and could you have found the bug without it?</span><textarea id="ref2"></textarea></label>
+        <label class="field"><span>What will you check first next time you see a similar bug?</span><textarea id="ref3"></textarea></label>
+      </section>
+
+      <section class="step" id="s8">
+        <header><span class="num">Record</span><h2>Learning record</h2>
+          <p>Your hypotheses, experiments, hints, revision and reflection in one place. Share it with your teacher or keep a copy.</p></header>
+        <div id="recordSummary"></div>
+        <label class="field" style="max-width:320px"><span>Your name</span><input type="text" id="studentName" placeholder="Full name"></label>
+        <div class="row">
+          <button class="btn primary" id="shareRec">Share with teacher</button>
+          <button class="btn" id="copyRec">Copy as text</button>
+          <button class="btn" id="dlRec">Download (.md)</button>
+          <span class="small muted" id="shareMsg"></span>
+        </div>
+        <textarea id="recFallback" hidden readonly class="code" style="min-height:160px"></textarea>
+      </section>
+    </div>
+  </div>
+</main>
+
+<!-- ============ TEACHER VIEW ============ -->
+<main id="teacherView" class="wrap" hidden>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tabRecords" aria-selected="true">Learning records</button>
+    <button role="tab" id="tabTasks" aria-selected="false">Assignments</button>
+  </div>
+
+  <div id="paneRecords">
+    <div class="stats" id="stats"></div>
+    <div class="tgrid">
+      <div>
+        <div class="row" style="justify-content:space-between;margin-bottom:8px">
+          <span class="label">Records</span>
+          <label class="small row" style="gap:6px"><input type="checkbox" id="onlyFlagged"> Flagged only</label>
+        </div>
+        <div class="reclist" id="recList"></div>
+      </div>
+      <div id="recDetail"></div>
+    </div>
+  </div>
+
+  <div id="paneTasks" hidden>
+    <div class="tgrid">
+      <div class="reclist" id="taskList"></div>
+      <form class="panel" id="taskForm" autocomplete="off">
+        <h2>New assignment</h2>
+        <p class="small muted">Students open DebugWise, pick this task, and follow the same diagnose → experiment → revise → explain workflow. Code runs as JavaScript in the browser.</p>
+        <label class="field"><span>Title</span><input type="text" id="tfTitle" required placeholder="e.g. Shopping cart total"></label>
+        <label class="field"><span>Problem</span><textarea id="tfProblem" required placeholder="What the program is supposed to do."></textarea></label>
+        <label class="field"><span>Instructions</span><textarea id="tfInstr" placeholder="What students should do and submit."></textarea></label>
+        <label class="field"><span>Expected behaviour</span><input type="text" id="tfExpected" placeholder="e.g. cartTotal([2, 3.5]) returns 5.5"></label>
+        <label class="field"><span>Assessment criteria (one per line)</span><textarea id="tfCriteria" placeholder="Hypothesis names the faulty state&#10;Explanation describes why the original failed"></textarea></label>
+        <label class="field"><span>Buggy code</span><textarea id="tfCode" class="code" required spellcheck="false" style="min-height:160px"></textarea></label>
+        <label class="field"><span>Tests (one per line: <code>call =&gt; expected JSON</code>)</span><textarea id="tfTests" class="mono" spellcheck="false" placeholder='cartTotal([2, 3.5]) => 5.5&#10;cartTotal([]) => 0'></textarea></label>
+        <div class="row"><button class="btn primary" type="submit">Create assignment</button><span class="small muted" id="tfMsg"></span></div>
+      </form>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+"use strict";
+
+/* ---------------- preset assignments ---------------- */
+const PRESETS = [
+  {
+    id: "longest-word", title: "Longest word", preset: true,
+    problem: "longestWord(words) takes an array of words and returns the longest one.",
+    instructions: "Find out why the function crashes, fix it, and explain the cause in your own words. Do not rewrite the function from scratch.",
+    expected: 'longestWord(["cat", "horse", "ox"]) returns "horse".',
+    criteria: ["Hypothesis identifies which values the loop visits", "At least one experiment that traces the loop", "Explanation refers to valid array indexes", "Transfer prediction is justified"],
+    code: 'function longestWord(words) {\n  let longest = "";\n  for (let i = 0; i <= words.length; i++) {\n    if (words[i].length > longest.length) {\n      longest = words[i];\n    }\n  }\n  return longest;\n}',
+    demoCall: 'longestWord(["cat", "horse", "ox"])', demoExpect: "horse",
+    tests: [{ call: 'longestWord(["cat", "horse", "ox"])', expect: "horse" }, { call: 'longestWord(["a"])', expect: "a" }, { call: 'longestWord(["hi", "hey"])', expect: "hey" }],
+    scripted: {
+      category: "Off-by-one / index out of range",
+      misconception: "Treating words.length as the last valid index, when the last index is words.length - 1.",
+      confidence: 0.92,
+      keywords: ["<=", "length", "index", "off by one", "off-by-one", "undefined", "last", "bound", "past the end"],
+      l1: "For an array of 3 words, which values of i does the loop visit? Which of those indexes actually hold a word?",
+      l2: "Focus on the loop condition on line 3. Put console.log(i, words[i]) as the first line inside the loop in your revision, then run longestWord([\"cat\", \"horse\", \"ox\"]) against it. Look at the last line printed.",
+      l3: "Line 3 → for (let i = 0; i < words.length; i++) {\nThe loop must stop at the last valid index, so use < instead of <=."
+    },
+    transfer: {
+      code: 'function lastItem(list) {\n  return list[list.length];\n}',
+      call: 'lastItem(["red", "green", "blue"])',
+      question: 'What does lastItem(["red", "green", "blue"]) return? Why?'
+    }
+  },
+  {
+    id: "class-average", title: "Class average", preset: true,
+    problem: "average(scores) returns the mean of an array of test scores.",
+    instructions: "Work out why average() throws an error, fix it with the smallest change you can, and explain what the program state was when it failed.",
+    expected: "average([80, 90, 100]) returns 90.",
+    criteria: ["Hypothesis says where total exists and what value it holds", "Experiment traces total across iterations", "Explanation uses the idea of scope or re-initialisation", "Reflection names a check for next time"],
+    code: 'function average(scores) {\n  let count = 0;\n  for (let i = 0; i < scores.length; i++) {\n    let total = 0;\n    total = total + scores[i];\n    count++;\n  }\n  return total / count;\n}',
+    demoCall: "average([80, 90, 100])", demoExpect: 90,
+    tests: [{ call: "average([80, 90, 100])", expect: 90 }, { call: "average([50])", expect: 50 }, { call: "average([70, 80])", expect: 75 }],
+    scripted: {
+      category: "Variable scope / accumulator placement",
+      misconception: "Believing a variable declared inside a loop body keeps its value between passes and is still visible after the loop.",
+      confidence: 0.86,
+      keywords: ["scope", "inside the loop", "declared inside", "reset", "block", "not defined", "outside", "every time", "each time"],
+      l1: "Where does total exist? Which lines of the program can see it, and what is its value at the start of each pass through the loop?",
+      l2: "Look at lines 3–7. Trace total for scores [80, 90] by writing its value after each pass. Then check what the return on line 8 can actually see.",
+      l3: "Move line 4 above the loop: declare let total = 0; before the for on line 3, and remove it from inside the loop.\nThe accumulator must be created once and must still exist when you return."
+    },
+    transfer: {
+      code: 'function countPassed(scores) {\n  for (let i = 0; i < scores.length; i++) {\n    let passed = 0;\n    if (scores[i] >= 50) passed++;\n  }\n  return passed;\n}',
+      call: "countPassed([40, 70, 90])",
+      question: "What happens when you call countPassed([40, 70, 90])? Which part of your earlier fix applies here?"
+    }
+  },
+  {
+    id: "study-minutes", title: "Study minutes", preset: true,
+    problem: "totalMinutes(entries) adds up study minutes typed into a form. Form fields always give back text.",
+    instructions: "The total is wrong but nothing crashes. Find the cause, fix it, and explain the difference between what you expected and what the program did.",
+    expected: 'totalMinutes(["30", "45", "20"]) returns 95.',
+    criteria: ["Hypothesis considers the type of each value", "Experiment checks how + behaves", "Explanation names string concatenation vs addition", "Transfer prediction is justified"],
+    code: 'function totalMinutes(entries) {\n  // entries come from a form, e.g. ["30", "45", "20"]\n  let total = 0;\n  for (const e of entries) {\n    total = total + e;\n  }\n  return total;\n}',
+    demoCall: 'totalMinutes(["30", "45", "20"])', demoExpect: 95,
+    tests: [{ call: 'totalMinutes(["30", "45", "20"])', expect: 95 }, { call: "totalMinutes([])", expect: 0 }, { call: 'totalMinutes(["5"])', expect: 5 }],
+    scripted: {
+      category: "Data types / implicit type coercion",
+      misconception: "Assuming values from a form are numbers, and that + always means addition.",
+      confidence: 0.88,
+      keywords: ["string", "type", "concaten", "number", "coerc", "text", "join", "glue", "typeof"],
+      l1: "What is the type of each item in entries? What does + do when one side is a string?",
+      l2: "Try two experiments: totalMinutes([\"1\", \"2\"]) and a revision that logs typeof total inside the loop. Then look closely at line 5, where each entry is added to total.",
+      l3: "Line 5 → total = total + Number(e);\nConvert each entry to a number before adding, so + means addition instead of joining text."
+    },
+    transfer: {
+      code: 'function averageAge(ages) {\n  // ages come from a form, e.g. ["18", "20", "22"]\n  let sum = 0;\n  for (const a of ages) sum += a;\n  return sum / ages.length;\n}',
+      call: 'averageAge(["18", "20", "22"])',
+      question: 'What does averageAge(["18", "20", "22"]) return? It is not 20. Why?'
+    }
+  }
+];
+
+/* ---------------- storage ---------------- */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+const K = { tasks: "dw.customTasks", prog: "dw.progress", recs: "dw.records", name: "dw.name", task: "dw.task" };
+
+let customTasks = store.get(K.tasks, []);
+let progressAll = store.get(K.prog, {});
+let sharedRecs = store.get(K.recs, []);
+const allTasks = () => PRESETS.concat(customTasks);
+const taskById = id => allTasks().find(t => t.id === id);
+
+let curTaskId = (() => {
+  const h = (location.hash || "").slice(1);
+  if (h && taskById(h)) return h;
+  const s = store.get(K.task, null);
+  return s && taskById(s) ? s : PRESETS[0].id;
+})();
+
+const blankProgress = task => ({
+  startedAt: Date.now(), hypotheses: [], experiments: [], hints: [], revised: task.code,
+  tests: null, testRuns: 0, explanation: "", explFeedback: null,
+  transfer: { prediction: "", result: null, matched: "", why: "" },
+  ref: { a: "", b: "", c: "" }, flags: [], diagnosis: null
+});
+const P = () => {
+  if (!progressAll[curTaskId]) progressAll[curTaskId] = blankProgress(taskById(curTaskId));
+  return progressAll[curTaskId];
+};
+const save = () => store.set(K.prog, progressAll);
+
+/* ---------------- helpers ---------------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const words = s => (s || "").trim().split(/\s+/).filter(Boolean).length;
+const clock = t => { const d = new Date(t); return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); };
+const since = (t, start) => { const s = Math.max(0, Math.round((t - start) / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+function fmt(v) {
+  if (typeof v === "string") return JSON.stringify(v);
+  if (v === undefined) return "undefined";
+  if (typeof v === "number" && isNaN(v)) return "NaN";
+  if (typeof v === "function") return "[function]";
+  try { return JSON.stringify(v); } catch (e) { return String(v); }
+}
+let toastT;
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600); }
+
+/* ---------------- sandboxed JS runner (Web Worker, 2 s limit) ---------------- */
+const WORKER_SRC = `
+const fmt = ${fmt.toString()};
+self.onmessage = (e) => {
+  const { code, call } = e.data; const logs = [];
+  const con = { log: (...a) => logs.push(a.map(x => typeof x === "string" ? x : fmt(x)).join(" ")) };
+  con.error = con.log; con.warn = con.log; con.info = con.log;
+  try {
+    const fn = new Function("console", code + "\\n;return (" + call + ");");
+    const v = fn(con);
+    postMessage({ ok: true, value: fmt(v), logs });
+  } catch (err) {
+    postMessage({ ok: false, error: (err && err.name ? err.name + ": " + err.message : String(err)), logs });
+  }
+};`;
+let workerURL = null;
+try { workerURL = URL.createObjectURL(new Blob([WORKER_SRC], { type: "text/javascript" })); } catch (e) {}
+function runCode(code, call) {
+  return new Promise(resolve => {
+    let w;
+    try { w = new Worker(workerURL); } catch (e) {
+      // Fallback without a worker: no infinite-loop protection.
+      const logs = [];
+      const con = { log: (...a) => logs.push(a.map(x => typeof x === "string" ? x : fmt(x)).join(" ")) };
+      try { const v = new Function("console", code + "\n;return (" + call + ");")(con); resolve({ ok: true, value: fmt(v), logs }); }
+      catch (err) { resolve({ ok: false, error: err.name + ": " + err.message, logs }); }
+      return;
+    }
+    const timer = setTimeout(() => { w.terminate(); resolve({ ok: false, error: "Stopped after 2 seconds: the code may be stuck in an infinite loop.", logs: [] }); }, 2000);
+    w.onmessage = e => { clearTimeout(timer); w.terminate(); resolve(e.data); };
+    w.onerror = e => { clearTimeout(timer); w.terminate(); resolve({ ok: false, error: e.message || "Error", logs: [] }); e.preventDefault(); };
+    w.postMessage({ code, call });
+  });
+}
+function termHTML(call, r, expect) {
+  let h = `<span class="dim">&gt; ${esc(call)}</span>\n`;
+  (r.logs || []).forEach(l => h += `<span class="dim">log:</span> ${esc(l)}\n`);
+  h += r.ok ? `${esc(r.value)}` : `<span class="err">${esc(r.error)}</span>`;
+  if (expect !== undefined) h += `\n<span class="dim">expected: ${esc(fmt(expect))}</span>`;
+  return h;
+}
+
+/* ---------------- Claude connection ---------------- */
+let sample = null, downloads = null, aiState = "connecting";
+function setAi(state) {
+  aiState = state;
+  const pill = $("aiPill"), txt = $("aiPillText");
+  pill.className = "pill " + (state === "live" ? "live" : state === "demo" ? "demo" : "");
+  txt.textContent = state === "live" ? "AI hints: Claude" : state === "demo" ? "AI hints: scripted demo" : "Connecting to Claude…";
+  pill.title = state === "live" ? "Diagnoses and hints are generated by Claude for any code." : "Claude is not available in this view, so preset tasks use pre-written diagnoses and custom tasks use generic prompts.";
+  renderLadder();
+}
+(async () => {
+  if (!window.claude || typeof window.claude.use !== "function") { setAi("demo"); return; }
+  try { downloads = await window.claude.use("downloads"); } catch (e) {}
+  try { sample = await window.claude.use("sample"); } catch (e) { sample = null; }
+  setAi(sample ? "live" : "demo");
+})();
+
+function aiErrorCopy(e) {
+  const c = e && e.code;
+  if (c === "not_granted" || c === "sampling_disabled" || c === "not_declared" || c === "capability_disabled" || c === "capability_removed") { sample = null; setAi("demo"); return "Claude isn’t enabled for this page, so DebugWise switched to scripted hints."; }
+  if (c === "rate_limited") return "Too many requests right now. Wait a minute, then try again.";
+  if (c === "session_expired") return "Your Claude session expired. Sign in again, then retry.";
+  return "Claude couldn’t answer this time. Try again.";
+}
+
+/* ---------------- diagnosis ---------------- */
+function numbered(code) { return code.split("\n").map((l, i) => String(i + 1).padStart(2, " ") + "  " + l).join("\n"); }
+function scriptedStatus(task, text) {
+  const kws = (task.scripted && task.scripted.keywords) || [];
+  const t = (text || "").toLowerCase();
+  const hits = kws.filter(k => t.includes(k.toLowerCase())).length;
+  return hits >= 2 ? "on_track" : hits === 1 ? "partly" : "off_track";
+}
+const statusCopy = {
+  on_track: "Your hypothesis is pointing in the right direction. Use the next experiment to confirm it.",
+  partly: "Part of your hypothesis is useful. Narrow it down: which exact value is wrong, and on which line does it go wrong?",
+  off_track: "Your hypothesis doesn’t match the evidence yet. Compare what you expected with what the experiment actually returned."
+};
+function scriptedHint(task, level, hyp) {
+  const s = task.scripted;
+  const status = s ? scriptedStatus(task, hyp) : "partly";
+  if (!s) {
+    const generic = [
+      "Which value in the program is different from what you expect? Name the variable and the line where it first goes wrong.",
+      "Pick the smallest input that still fails. Add console.log for every variable that changes inside the loop or function, and compare each printed value with your own hand trace.",
+      "No automatic fix is available for this task in demo mode. Compare your hand trace with the logged values line by line; the first line where they differ is where the fix belongs."
+    ];
+    return { category: "Unclassified (demo mode)", misconception: "Not analysed: Claude is unavailable, so this diagnosis is generic.", confidence: 0.35, hypothesis_status: status, hypothesis_feedback: statusCopy[status], support: generic[level - 1], fix_lines: "", source: "scripted" };
+  }
+  return { category: s.category, misconception: s.misconception, confidence: s.confidence, hypothesis_status: status, hypothesis_feedback: statusCopy[status], support: level === 1 ? s.l1 : level === 2 ? s.l2 : "", fix_lines: level === 3 ? s.l3 : "", source: "scripted" };
+}
+async function aiHint(task, level, prog, failText, signal) {
+  const hyps = prog.hypotheses.map((h, i) => `${i + 1}. ${h.text}`).join("\n") || "(none)";
+  const exps = prog.experiments.map((x, i) => `${i + 1}. ran ${x.call} on ${x.target === "orig" ? "original" : "revised"} code; expected ${x.expect || "(not stated)"}; got ${x.result}; student note: ${x.note}`).join("\n") || "(none)";
+  const prev = prog.hints.map(h => `Level ${h.level}: ${h.payload.support || h.payload.fix_lines}`).join("\n") || "(none)";
+  const prompt = `You are DebugWise AI, a debugging tutor for undergraduate novice programmers. Your job is to support the student's own diagnosis using tiered scaffolding. Never return a full corrected program.
+
+ASSIGNMENT: ${task.title}
+Problem: ${task.problem}
+Expected behaviour: ${task.expected || "(not given)"}
+
+ORIGINAL CODE (JavaScript, line-numbered):
+${numbered(task.code)}
+
+OBSERVED FAILURE:
+${failText}
+
+STUDENT HYPOTHESES (oldest first):
+${hyps}
+
+STUDENT EXPERIMENTS:
+${exps}
+
+HINTS ALREADY GIVEN:
+${prev}
+
+The student is requesting support LEVEL ${level} of 3.
+- Level 1: name the likely bug category and the misconception behind it, and ask ONE diagnostic question that makes the student inspect program state. Do not give a line number or the fix.
+- Level 2: a narrowed hint that points to the relevant line range and says what to trace or log. No corrected code.
+- Level 3: a minimal possible fix: only the changed line(s), with one sentence on why. Never the whole program.
+Also judge the student's LATEST hypothesis against the real bug, and give 1-2 sentences of feedback that do not reveal more than the current level allows.
+Set confidence honestly (0 to 1): how sure you are that your diagnosis is the real cause. Use below 0.6 if the code or failure is ambiguous.
+
+Reply with only JSON:
+{"category": string, "misconception": string, "confidence": number, "hypothesis_status": "on_track"|"partly"|"off_track", "hypothesis_feedback": string, "support": string, "fix_lines": string}
+For levels 1 and 2, fix_lines must be "". For level 3, support may be "".`;
+  const r = await sample.json(prompt, { signal, cache: false });
+  if (!r || typeof r !== "object") throw { code: "invalid_json" };
+  const conf = Number(r.confidence);
+  return {
+    category: String(r.category || "Unclassified"), misconception: String(r.misconception || ""),
+    confidence: isFinite(conf) ? Math.max(0, Math.min(1, conf)) : 0.5,
+    hypothesis_status: ["on_track", "partly", "off_track"].includes(r.hypothesis_status) ? r.hypothesis_status : "partly",
+    hypothesis_feedback: String(r.hypothesis_feedback || ""), support: String(r.support || ""),
+    fix_lines: level === 3 ? String(r.fix_lines || "") : "", source: "ai"
+  };
+}
+
+/* ---------------- flags (guardrails) ---------------- */
+function addFlag(prog, type, msg) {
+  if (prog.flags.some(f => f.type === type)) return;
+  prog.flags.push({ type, msg, at: Date.now() });
+}
+const FLAG_LABEL = { low_conf: "Low-confidence diagnosis", rapid: "Rapid hint requests", early_fix: "Early jump to fix", off_track_fix: "Fix reached with off-track hypothesis", thin_expl: "Thin explanation" };
+
+/* ---------------- student rendering ---------------- */
+let failText = "";
+function renderTaskSelect() {
+  $("taskSel").innerHTML = allTasks().map(t => `<option value="${esc(t.id)}"${t.id === curTaskId ? " selected" : ""}>${esc(t.title)}${t.preset ? "" : " (teacher-created)"}</option>`).join("");
+}
+function renderBrief() {
+  const t = taskById(curTaskId);
+  $("brief").innerHTML = `<div class="row" style="justify-content:space-between"><h2>${esc(t.title)}</h2><span class="chip info">${t.preset ? "Sample assignment" : "Teacher assignment"}</span></div>
+  <dl>
+    <div><dt>Problem</dt><dd>${esc(t.problem)}</dd></div>
+    ${t.instructions ? `<div><dt>Instructions</dt><dd>${esc(t.instructions)}</dd></div>` : ""}
+    ${t.expected ? `<div><dt>Expected behaviour</dt><dd>${esc(t.expected)}</dd></div>` : ""}
+    ${t.criteria && t.criteria.length ? `<div><dt>Assessed on</dt><dd><ul>${t.criteria.map(c => `<li>${esc(c)}</li>`).join("")}</ul></dd></div>` : ""}
+  </dl>`;
+  $("origCode").innerHTML = t.code.split("\n").map((l, i) => `<span class="ln"><i>${i + 1}</i>${esc(l) || " "}</span>`).join("");
+}
+async function renderFailure() {
+  const t = taskById(curTaskId);
+  $("failOut").innerHTML = "Running…";
+  const r = await runCode(t.code, t.demoCall);
+  failText = `> ${t.demoCall}\n` + (r.ok ? r.value : r.error) + (t.demoExpect !== undefined ? `\nexpected: ${fmt(t.demoExpect)}` : "");
+  $("failOut").innerHTML = termHTML(t.demoCall, r, t.demoExpect);
+}
+function renderHyps() {
+  const p = P();
+  $("hypList").innerHTML = p.hypotheses.slice().reverse().map((h, i) => `<li class="hyp"><div class="meta">Hypothesis ${p.hypotheses.length - i} · ${since(h.at, p.startedAt)} in</div>${esc(h.text)}</li>`).join("");
+}
+function renderExps() {
+  const p = P();
+  $("expList").innerHTML = p.experiments.slice().reverse().map((x, i) => `<li><div class="meta">Experiment ${p.experiments.length - i} · ${x.target === "orig" ? "original" : "revision"} · ${since(x.at, p.startedAt)} in</div><code>${esc(x.call)}</code> → <code>${esc(x.result)}</code>${x.expect ? ` <span class="muted small">(expected ${esc(x.expect)})</span>` : ""}<div>${esc(x.note)}</div></li>`).join("");
+}
+function gate(p) {
+  const last = p.hints.length ? p.hints[p.hints.length - 1].at : 0;
+  const lastHyp = p.hypotheses.filter(h => h.at > last);
+  const lastExp = p.experiments.filter(x => x.at > last);
+  return { hyp: lastHyp.length > 0, exp: lastExp.length > 0, hypText: lastHyp.length ? lastHyp[lastHyp.length - 1].text : "" };
+}
+let hintCtl = null, hintBusy = false, hintErr = "";
+function renderLadder() {
+  const p = P(), t = taskById(curTaskId);
+  if (!t) return;
+  const g = gate(p), next = p.hints.length + 1;
+  const names = ["Bug category + diagnostic question", "Narrowed hint", "Possible fix (changed lines only)"];
+  let h = "";
+  const d = p.diagnosis;
+  if (d && d.confidence < 0.6) h += `<div class="notice warn"><b>DebugWise is not sure about this diagnosis</b> (confidence ${Math.round(d.confidence * 100)}%). Treat the hints as suggestions and check them with your own experiments. Your teacher has been notified to review it.</div>`;
+  for (let L = 1; L <= 3; L++) {
+    const got = p.hints.find(x => x.level === L);
+    if (got) {
+      const y = got.payload;
+      h += `<div class="rung open"><h3><span class="lvl">L${L}</span>${names[L - 1]}<span class="chip ${y.source === "ai" ? "info" : "warn"}">${y.source === "ai" ? "Claude" : "scripted"}</span></h3>
+        ${L === 1 ? `<div class="small"><span class="label">Likely category</span><br>${esc(y.category)}</div><div class="small"><span class="label">Possible misconception</span><br>${esc(y.misconception)}</div>` : ""}
+        ${y.support ? `<div>${esc(y.support).replace(/\n/g, "<br>")}</div>` : ""}
+        ${y.fix_lines ? `<pre class="term">${esc(y.fix_lines)}</pre>` : ""}
+        ${y.hypothesis_feedback ? `<div class="notice ${y.hypothesis_status === "on_track" ? "ok" : y.hypothesis_status === "off_track" ? "bad" : "info"} small"><b>On your hypothesis:</b> ${esc(y.hypothesis_feedback)}</div>` : ""}
+      </div>`;
+    } else if (L === next) {
+      const ready = g.hyp && g.exp;
+      h += `<div class="rung"><h3><span class="lvl">L${L}</span>${names[L - 1]}</h3>
+        <ul class="checks"><li class="${g.hyp ? "met" : ""}">A new hypothesis${p.hints.length ? " since your last hint" : ""}</li><li class="${g.exp ? "met" : ""}">A new logged experiment${p.hints.length ? " since your last hint" : ""}</li></ul>
+        <div class="row"><button class="btn primary" id="hintReq" ${ready && !hintBusy && aiState !== "connecting" ? "" : "disabled"}>${hintBusy ? "Thinking…" : `Unlock level ${L}`}</button>
+        ${hintBusy ? `<button class="btn ghost" id="hintStop">Stop</button>` : ""}
+        <span class="small muted">${aiState === "connecting" ? "Connecting to Claude…" : !ready ? "Complete both steps above first." : ""}</span></div>
+        ${hintErr ? `<div class="notice bad small">${esc(hintErr)}</div>` : ""}
+      </div>`;
+    } else {
+      h += `<div class="rung"><h3><span class="lvl">L${L}</span><span class="muted">${names[L - 1]}</span><span class="chip">locked</span></h3></div>`;
+    }
+  }
+  $("ladder").innerHTML = h;
+  const btn = $("hintReq"); if (btn) btn.onclick = requestHint;
+  const stop = $("hintStop"); if (stop) stop.onclick = () => hintCtl && hintCtl.abort();
+}
+async function requestHint() {
+  const p = P(), t = taskById(curTaskId), g = gate(p);
+  if (!(g.hyp && g.exp) || hintBusy) return;
+  const level = p.hints.length + 1;
+  hintBusy = true; hintErr = ""; renderLadder();
+  let payload;
+  if (sample) {
+    hintCtl = new AbortController();
+    try { payload = await aiHint(t, level, p, failText, hintCtl.signal); }
+    catch (e) {
+      hintBusy = false;
+      if (e && e.code === "cancelled") { renderLadder(); return; }
+      hintErr = aiErrorCopy(e);
+      if (sample) { renderLadder(); return; }
+      payload = scriptedHint(t, level, g.hypText); hintErr = "";
+    }
+  } else payload = scriptedHint(t, level, g.hypText);
+  hintBusy = false;
+  const now = Date.now();
+  const prevAt = p.hints.length ? p.hints[p.hints.length - 1].at : null;
+  p.hints.push({ level, at: now, payload });
+  if (level === 1 || !p.diagnosis) p.diagnosis = { category: payload.category, confidence: payload.confidence };
+  else p.diagnosis.confidence = Math.min(p.diagnosis.confidence, payload.confidence);
+  if (payload.confidence < 0.6) addFlag(p, "low_conf", `Diagnosis confidence ${Math.round(payload.confidence * 100)}% (${payload.category}).`);
+  if (prevAt && now - prevAt < 60000) addFlag(p, "rapid", `Level ${level} requested ${Math.round((now - prevAt) / 1000)} s after level ${level - 1}.`);
+  if (level === 3 && now - p.startedAt < 4 * 60000) addFlag(p, "early_fix", `Reached the fix level ${since(now, p.startedAt)} after starting.`);
+  if (level === 3 && payload.hypothesis_status === "off_track") addFlag(p, "off_track_fix", "Latest hypothesis was off track when the fix was shown; the misconception may persist.");
+  save(); renderAll();
+}
+
+function renderTests() {
+  const p = P(), t = taskById(curTaskId);
+  if (!p.tests) { $("testOut").innerHTML = ""; $("testSummary").textContent = t.tests && t.tests.length ? `${t.tests.length} tests ready` : "No tests defined for this task"; return; }
+  const pass = p.tests.filter(r => r.pass).length;
+  $("testSummary").innerHTML = `<span class="chip ${pass === p.tests.length ? "ok" : "bad"}">${pass} / ${p.tests.length} passing</span>`;
+  $("testOut").innerHTML = `<table><thead><tr><th>Call</th><th>Expected</th><th>Got</th><th></th></tr></thead><tbody>${p.tests.map(r => `<tr><td class="mono">${esc(r.call)}</td><td class="mono">${esc(r.expect)}</td><td class="mono">${esc(r.got)}${r.logs && r.logs.length ? `<div class="muted">${r.logs.map(esc).join("<br>")}</div>` : ""}</td><td>${r.pass ? '<span class="chip ok">pass</span>' : '<span class="chip bad">fail</span>'}</td></tr>`).join("")}</tbody></table>`;
+}
+async function runTests() {
+  const p = P(), t = taskById(curTaskId);
+  p.revised = $("revCode").value;
+  const out = [];
+  for (const tc of (t.tests || [])) {
+    const r = await runCode(p.revised, tc.call);
+    const exp = fmt(tc.expect);
+    out.push({ call: tc.call, expect: exp, got: r.ok ? r.value : r.error, pass: r.ok && r.value === exp, logs: r.logs });
+  }
+  p.tests = out; p.testRuns++; save(); renderTests(); renderTransfer(); renderSteps(); renderRecord();
+}
+
+function renderExplFb() {
+  const p = P(), f = p.explFeedback;
+  $("explFb").innerHTML = f ? `<div class="notice ${f.kind}"><b>${f.source === "ai" ? "Claude’s feedback" : "Checklist feedback"}:</b> ${esc(f.text)}</div>` : "";
+}
+async function checkExplanation() {
+  const p = P(), t = taskById(curTaskId);
+  const text = $("explText").value.trim();
+  if (words(text) < 15) { $("explMsg").textContent = "Write at least 15 words first."; return; }
+  $("explMsg").textContent = "";
+  const btn = $("explCheck"); btn.disabled = true; btn.textContent = "Checking…";
+  try {
+    if (sample) {
+      const r = await sample.json(`You are a debugging tutor. A novice programmer has fixed a bug and explained it. Judge only the explanation of WHY the original code failed. Do not give corrected code.
+
+Original code:
+${numbered(t.code)}
+
+Observed failure:
+${failText}
+
+Student explanation:
+${text}
+
+Reply with only JSON: {"rating": "strong"|"partial"|"weak", "feedback": string (max 60 words; say what is accurate, and what is missing about program state or language rules)}`, { modelTier: "quick", cache: false });
+      p.explFeedback = { source: "ai", kind: r.rating === "strong" ? "ok" : r.rating === "weak" ? "bad" : "info", text: String(r.feedback || "") };
+    } else {
+      const st = t.scripted ? scriptedStatus(t, text) : "partly";
+      const msg = st === "on_track" ? "Your explanation names the key concept. Check that it also says what value the program actually had when it failed." : st === "partly" ? "You touch on the cause. Add what the program state was (which variable, which value) and which language rule produced it." : "The explanation doesn’t yet name the cause. Describe what the program did step by step, compared with what you expected.";
+      p.explFeedback = { source: "scripted", kind: st === "on_track" ? "ok" : st === "off_track" ? "bad" : "info", text: msg };
+    }
+  } catch (e) { $("explMsg").textContent = aiErrorCopy(e); }
+  btn.disabled = false; btn.textContent = "Get feedback on my explanation";
+  save(); renderExplFb();
+}
+
+function renderTransfer() {
+  const p = P(), t = taskById(curTaskId);
+  const passing = p.tests && p.tests.length && p.tests.every(r => r.pass);
+  const tr = t.transfer || { code: t.code, call: t.demoCall, question: "Write a new input that would have broken the original code. Predict what the original returns for it, then run it to check." };
+  const isGeneric = !t.transfer;
+  $("s6").classList.toggle("locked", !passing);
+  if (!passing) { $("transferBody").innerHTML = `<div class="notice info small">Unlocks when all tests pass in Step 4.</div>`; return; }
+  $("transferBody").innerHTML = `
+    ${isGeneric ? "" : `<pre class="codeview">${tr.code.split("\n").map((l, i) => `<span class="ln"><i>${i + 1}</i>${esc(l) || " "}</span>`).join("")}</pre>`}
+    <p><b>${esc(tr.question)}</b></p>
+    <label class="field"><span>Your prediction (before running)</span><textarea id="trPredict" placeholder="I predict … because …">${esc(p.transfer.prediction)}</textarea></label>
+    <div class="row">${isGeneric ? `<input type="text" id="trCall" class="mono grow" value="${esc(p.transfer.call || tr.call)}">` : ""}<button class="btn" id="trRun">Run to check</button></div>
+    ${p.transfer.result ? `<pre class="term">${p.transfer.result}</pre>
+    <div class="row"><span class="small">Did your prediction match?</span>
+      <div class="seg" role="group" aria-label="Prediction matched"><button id="trYes" aria-pressed="${p.transfer.matched === "yes"}">Yes</button><button id="trNo" aria-pressed="${p.transfer.matched === "no"}">No</button></div></div>
+    <label class="field"><span>Which debugging principle from this task applies here?</span><textarea id="trWhy">${esc(p.transfer.why)}</textarea></label>` : ""}`;
+  $("trPredict").oninput = e => { p.transfer.prediction = e.target.value; saveSoon(); };
+  $("trRun").onclick = async () => {
+    if (words(p.transfer.prediction) < 4) { toast("Write your prediction before running."); return; }
+    const call = isGeneric ? $("trCall").value : tr.call;
+    p.transfer.call = call;
+    const r = await runCode(isGeneric ? t.code : tr.code, call);
+    p.transfer.result = termHTML(call, r);
+    p.transfer.ranAt = Date.now();
+    save(); renderTransfer(); renderSteps();
+  };
+  if ($("trYes")) {
+    $("trYes").onclick = () => { p.transfer.matched = "yes"; save(); renderTransfer(); renderSteps(); };
+    $("trNo").onclick = () => { p.transfer.matched = "no"; save(); renderTransfer(); renderSteps(); };
+    $("trWhy").oninput = e => { p.transfer.why = e.target.value; saveSoon(); renderStepsSoon(); };
+  }
+}
+
+const STEP_NAMES = ["Hypothesis", "Experiment", "Support", "Revise", "Explain", "Transfer", "Reflect"];
+function stepDone(p) {
+  return [
+    p.hypotheses.length > 0, p.experiments.length > 0, p.hints.length > 0,
+    !!(p.tests && p.tests.length && p.tests.every(r => r.pass)),
+    words(p.explanation) >= 15, !!(p.transfer.result && p.transfer.matched && words(p.transfer.why) >= 5),
+    words(p.ref.a) >= 5 && words(p.ref.b) >= 5 && words(p.ref.c) >= 5
+  ];
+}
+function renderSteps() {
+  const d = stepDone(P());
+  $("steps").innerHTML = STEP_NAMES.map((n, i) => `<a href="#s${i + 1}" class="${d[i] ? "done" : ""}"><b>${i + 1}</b>${n}</a>`).join("");
+  $("steps").querySelectorAll("a").forEach(a => a.onclick = e => { e.preventDefault(); const el = document.querySelector(a.getAttribute("href")); el && el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); });
+}
+let stT; function renderStepsSoon() { clearTimeout(stT); stT = setTimeout(() => { renderSteps(); renderRecord(); }, 400); }
+let svT; function saveSoon() { clearTimeout(svT); svT = setTimeout(save, 400); }
+
+function renderRecord() {
+  const p = P(), t = taskById(curTaskId);
+  const pass = p.tests ? p.tests.filter(r => r.pass).length + "/" + p.tests.length : "not run";
+  $("recordSummary").innerHTML = `<div class="scroll-x"><table><tbody>
+    <tr><th>Hypotheses</th><td>${p.hypotheses.length}</td><th>Experiments</th><td>${p.experiments.length}</td></tr>
+    <tr><th>Hint levels used</th><td>${p.hints.length} of 3</td><th>Tests passing</th><td>${pass}</td></tr>
+    <tr><th>Diagnosis</th><td colspan="3">${p.diagnosis ? esc(p.diagnosis.category) + ` <span class="muted">(${Math.round(p.diagnosis.confidence * 100)}% confidence)</span>` : '<span class="muted">No hints requested</span>'}</td></tr>
+    ${p.flags.length ? `<tr><th>Review flags</th><td colspan="3">${p.flags.map(f => `<span class="chip warn">${esc(FLAG_LABEL[f.type] || f.type)}</span>`).join(" ")}</td></tr>` : ""}
+  </tbody></table></div>`;
+}
+function recordMarkdown(p, t, name) {
+  const L = [];
+  L.push(`# DebugWise learning record: ${t.title}`, "", `Student: ${name || "(not given)"}  `, `Started: ${new Date(p.startedAt).toLocaleString()}`, "");
+  L.push("## Original code", "```js", t.code, "```", "");
+  L.push("## Hypotheses"); p.hypotheses.forEach((h, i) => L.push(`${i + 1}. (${since(h.at, p.startedAt)}) ${h.text}`)); L.push("");
+  L.push("## Experiments"); p.experiments.forEach((x, i) => L.push(`${i + 1}. (${since(x.at, p.startedAt)}) \`${x.call}\` on ${x.target === "orig" ? "original" : "revision"} → \`${x.result}\`; expected ${x.expect || "-"}. Note: ${x.note}`)); L.push("");
+  L.push("## Hints used"); p.hints.forEach(h => L.push(`- Level ${h.level} (${since(h.at, p.startedAt)}, ${h.payload.source}): ${(h.payload.support || h.payload.fix_lines).replace(/\n/g, " ")}`)); L.push("");
+  L.push("## Revised code", "```js", p.revised, "```", `Tests: ${p.tests ? p.tests.filter(r => r.pass).length + "/" + p.tests.length + " passing" : "not run"}`, "");
+  L.push("## Explanation", p.explanation || "-", "");
+  L.push("## Transfer", `Prediction: ${p.transfer.prediction || "-"}`, `Matched: ${p.transfer.matched || "-"}`, `Principle: ${p.transfer.why || "-"}`, "");
+  L.push("## Reflection", `- First guess and change: ${p.ref.a || "-"}`, `- Hint level needed: ${p.ref.b || "-"}`, `- Next time: ${p.ref.c || "-"}`, "");
+  if (p.flags.length) { L.push("## Flags for instructor review"); p.flags.forEach(f => L.push(`- ${FLAG_LABEL[f.type] || f.type}: ${f.msg}`)); }
+  return L.join("\n");
+}
+
+function renderAll() {
+  const p = P(), t = taskById(curTaskId);
+  renderTaskSelect(); renderBrief(); renderHyps(); renderExps(); renderLadder(); renderTests(); renderExplFb(); renderTransfer(); renderSteps(); renderRecord();
+  if ($("revCode").dataset.task !== curTaskId) {
+    $("revCode").value = p.revised; $("revCode").dataset.task = curTaskId;
+    $("explText").value = p.explanation; $("ref1").value = p.ref.a; $("ref2").value = p.ref.b; $("ref3").value = p.ref.c;
+    $("expCall").value = t.demoCall || ""; $("expExpect").value = ""; $("expOut").hidden = true; $("expNoteWrap").hidden = true; $("hypText").value = "";
+  }
+}
+function switchTask(id) {
+  if (hintCtl) hintCtl.abort();
+  hintBusy = false; hintErr = "";
+  curTaskId = id; store.set(K.task, id);
+  $("revCode").dataset.task = "";
+  renderAll(); renderFailure();
+}
+
+/* ---------------- student events ---------------- */
+$("taskSel").onchange = e => switchTask(e.target.value);
+let resetArmed = false;
+$("resetTask").onclick = () => {
+  const b = $("resetTask");
+  if (!resetArmed) { resetArmed = true; b.textContent = "Click again to erase this task’s work"; setTimeout(() => { resetArmed = false; b.textContent = "Start over"; }, 3500); return; }
+  resetArmed = false; b.textContent = "Start over";
+  delete progressAll[curTaskId]; save(); $("revCode").dataset.task = ""; renderAll(); toast("Task reset");
+};
+$("hypSave").onclick = () => {
+  const p = P(), txt = $("hypText").value.trim();
+  const last = p.hypotheses[p.hypotheses.length - 1];
+  if (words(txt) < 10) { $("hypMsg").textContent = `Write at least 10 words (${words(txt)} so far). Say what is wrong and why you think so.`; return; }
+  if (last && last.text.trim().toLowerCase() === txt.toLowerCase()) { $("hypMsg").textContent = "This is the same as your last hypothesis. Update it with what your experiment showed."; return; }
+  p.hypotheses.push({ text: txt, at: Date.now() });
+  $("hypText").value = ""; $("hypMsg").textContent = "Saved.";
+  save(); renderHyps(); renderLadder(); renderSteps(); renderRecord();
+};
+let lastExp = null;
+$("expRun").onclick = async () => {
+  const p = P(), t = taskById(curTaskId);
+  const call = $("expCall").value.trim(); if (!call) { toast("Enter a function call to run."); return; }
+  const target = $("expTarget").value;
+  const r = await runCode(target === "orig" ? t.code : $("revCode").value, call);
+  lastExp = { call, target, expect: $("expExpect").value.trim(), result: r.ok ? r.value : r.error, logs: r.logs };
+  $("expOut").innerHTML = termHTML(call, r); $("expOut").hidden = false;
+  $("expNoteWrap").hidden = false; $("expMsg").textContent = ""; $("expNote").focus();
+};
+$("expLog").onclick = () => {
+  const p = P(), note = $("expNote").value.trim();
+  if (!lastExp) return;
+  if (words(note) < 5) { $("expMsg").textContent = "Write at least 5 words about what the result means."; return; }
+  p.experiments.push(Object.assign({}, lastExp, { note, at: Date.now() }));
+  lastExp = null; $("expNote").value = ""; $("expNoteWrap").hidden = true;
+  save(); renderExps(); renderLadder(); renderSteps(); renderRecord();
+};
+$("revCode").oninput = e => { P().revised = e.target.value; saveSoon(); };
+$("revCode").onkeydown = e => {
+  if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); const el = e.target, s = el.selectionStart; el.setRangeText("  ", s, el.selectionEnd, "end"); P().revised = el.value; saveSoon(); }
+};
+$("runTests").onclick = runTests;
+$("revReset").onclick = () => { const t = taskById(curTaskId); $("revCode").value = t.code; P().revised = t.code; save(); };
+$("explText").oninput = e => { P().explanation = e.target.value; saveSoon(); renderStepsSoon(); };
+$("explCheck").onclick = checkExplanation;
+["ref1", "ref2", "ref3"].forEach((id, i) => $(id).oninput = e => { P().ref["abc"[i]] = e.target.value; saveSoon(); renderStepsSoon(); });
+$("studentName").value = store.get(K.name, "");
+$("studentName").oninput = e => store.set(K.name, e.target.value);
+
+$("shareRec").onclick = () => {
+  const p = P(), t = taskById(curTaskId), name = $("studentName").value.trim();
+  if (!name) { $("shareMsg").textContent = "Add your name first."; return; }
+  if (words(p.explanation) < 15) addFlag(p, "thin_expl", "Shared with an explanation under 15 words.");
+  const rec = { id: "r" + Date.now(), student: name, taskId: t.id, taskTitle: t.title, sharedAt: Date.now(), progress: JSON.parse(JSON.stringify(p)), code: t.code };
+  sharedRecs = sharedRecs.filter(r => !(r.student === name && r.taskId === t.id)).concat(rec);
+  store.set(K.recs, sharedRecs); save(); renderRecord();
+  $("shareMsg").textContent = "Shared. Switch to Teacher to see it.";
+};
+$("copyRec").onclick = async () => {
+  const md = recordMarkdown(P(), taskById(curTaskId), $("studentName").value.trim());
+  try { await navigator.clipboard.writeText(md); toast("Record copied"); }
+  catch (e) { const f = $("recFallback"); f.value = md; f.hidden = false; f.select(); toast("Select the text below and copy it"); }
+};
+$("dlRec").onclick = async () => {
+  const t = taskById(curTaskId), md = recordMarkdown(P(), t, $("studentName").value.trim());
+  const filename = `DebugWise_${t.id}_learning-record.md`;
+  if (downloads) {
+    try { await downloads.save({ filename, data: md }); } catch (e) { if (e && e.code !== "cancelled" && e.code !== "declined") toast("Download unavailable here. Use Copy as text."); }
+    return;
+  }
+  if (!window.claude) { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([md], { type: "text/markdown" })); a.download = filename; a.click(); return; }
+  const f = $("recFallback"); f.value = md; f.hidden = false; toast("Download unavailable here. Copy the text below.");
+};
+
+/* ---------------- teacher view ---------------- */
+const EX_START = Date.now() - 3 * 86400000;
+const EXAMPLES = [
+  { id: "ex1", example: true, student: "Example student A", taskId: "longest-word", taskTitle: "Longest word", sharedAt: EX_START + 1500000, code: PRESETS[0].code,
+    progress: { startedAt: EX_START, hypotheses: [{ text: "I think words[i] is undefined at some point because the error says it cannot read length of undefined.", at: EX_START + 90000 }, { text: "I think the loop runs one time too many because i goes up to 3 when there are only 3 words, and words[3] does not exist.", at: EX_START + 520000 }],
+      experiments: [{ call: 'longestWord(["cat"])', target: "orig", expect: '"cat"', result: "TypeError: Cannot read properties of undefined (reading 'length')", note: "Even one word crashes, so it is not about which word is longest.", at: EX_START + 200000 }, { call: 'longestWord(["cat", "horse", "ox"])', target: "rev", expect: "logs 0,1,2", result: '"horse"', note: "With console.log I saw i reached 3 and words[3] was undefined before the crash.", at: EX_START + 480000 }],
+      hints: [{ level: 1, at: EX_START + 260000, payload: { source: "ai", category: "Off-by-one / index out of range", support: "For an array of 3 words, which values of i does the loop visit?", confidence: 0.91 } }],
+      tests: [{ pass: true }, { pass: true }, { pass: true }], explanation: "The loop condition used <= so i reached words.length, which is one past the last index. words[3] is undefined and reading .length on undefined throws a TypeError.",
+      transfer: { prediction: "It returns undefined because list.length is one past the end.", matched: "yes", why: "Last valid index is length - 1." },
+      ref: { a: "I first thought the comparison was wrong, the log showed the index went too far.", b: "Only level 1. I think I could have found it with the log alone.", c: "Check the loop bounds against the last valid index." },
+      flags: [], diagnosis: { category: "Off-by-one / index out of range", confidence: 0.91 } } },
+  { id: "ex2", example: true, student: "Example student B", taskId: "study-minutes", taskTitle: "Study minutes", sharedAt: EX_START + 86400000 + 400000, code: PRESETS[2].code,
+    progress: { startedAt: EX_START + 86400000, hypotheses: [{ text: "I think the loop is wrong because the number it gives back is way too big for the total.", at: EX_START + 86400000 + 40000 }, { text: "Maybe the for of loop does not work and something is going wrong with the total variable here.", at: EX_START + 86400000 + 75000 }, { text: "I think the loop is wrong and total is not being added properly in the loop each time it runs.", at: EX_START + 86400000 + 110000 }],
+      experiments: [{ call: 'totalMinutes(["30", "45", "20"])', target: "orig", expect: "95", result: '"0304520"', note: "it is wrong still the same answer", at: EX_START + 86400000 + 50000 }, { call: 'totalMinutes(["1"])', target: "orig", expect: "1", result: '"01"', note: "still wrong answer for one item", at: EX_START + 86400000 + 85000 }, { call: 'totalMinutes(["1","2"])', target: "orig", expect: "3", result: '"012"', note: "wrong again not adding numbers", at: EX_START + 86400000 + 115000 }],
+      hints: [{ level: 1, at: EX_START + 86400000 + 60000, payload: { source: "ai", category: "Data types / implicit type coercion", support: "What is the type of each item in entries?", confidence: 0.87 } }, { level: 2, at: EX_START + 86400000 + 95000, payload: { source: "ai", support: "Look at line 5 and log typeof total.", confidence: 0.87 } }, { level: 3, at: EX_START + 86400000 + 125000, payload: { source: "ai", fix_lines: "Line 5 → total = total + Number(e);", confidence: 0.87, hypothesis_status: "off_track" } }],
+      tests: [{ pass: true }, { pass: true }, { pass: true }], explanation: "I added Number and it works now.",
+      transfer: { prediction: "20", matched: "no", why: "" }, ref: { a: "", b: "", c: "" },
+      flags: [{ type: "rapid", msg: "Level 2 requested 35 s after level 1.", at: 0 }, { type: "early_fix", msg: "Reached the fix level 2:05 after starting.", at: 0 }, { type: "off_track_fix", msg: "Latest hypothesis was off track when the fix was shown; the misconception may persist.", at: 0 }, { type: "thin_expl", msg: "Shared with an explanation under 15 words.", at: 0 }],
+      diagnosis: { category: "Data types / implicit type coercion", confidence: 0.87 } } },
+  { id: "ex3", example: true, student: "Example student C", taskId: "class-average", taskTitle: "Class average", sharedAt: EX_START + 2 * 86400000, code: PRESETS[1].code,
+    progress: { startedAt: EX_START + 2 * 86400000 - 900000, hypotheses: [{ text: "I think count is wrong because dividing by count gives an error when the function returns at the end.", at: 0 }],
+      experiments: [{ call: "average([])", target: "orig", expect: "0", result: "ReferenceError: total is not defined", note: "Even an empty list gives the same error so it is not about count being zero.", at: 0 }],
+      hints: [{ level: 1, at: EX_START + 2 * 86400000 - 600000, payload: { source: "ai", category: "Division by zero / empty input", support: "What should average return for an empty list?", confidence: 0.48 } }],
+      tests: [{ pass: false }, { pass: false }, { pass: false }], explanation: "", transfer: { prediction: "", matched: "", why: "" }, ref: { a: "", b: "", c: "" },
+      flags: [{ type: "low_conf", msg: "Diagnosis confidence 48% (Division by zero / empty input).", at: 0 }], diagnosis: { category: "Division by zero / empty input", confidence: 0.48 } } }
+];
+let tTab = "records", selRec = null;
+const allRecs = () => sharedRecs.slice().reverse().concat(EXAMPLES);
+function renderTeacher() {
+  $("tabRecords").setAttribute("aria-selected", tTab === "records");
+  $("tabTasks").setAttribute("aria-selected", tTab === "tasks");
+  $("paneRecords").hidden = tTab !== "records"; $("paneTasks").hidden = tTab !== "tasks";
+  if (tTab === "records") renderRecords(); else renderTaskAdmin();
+}
+function renderRecords() {
+  const recs = allRecs();
+  const flagged = recs.filter(r => r.progress.flags.length);
+  const avgHints = recs.length ? (recs.reduce((s, r) => s + r.progress.hints.length, 0) / recs.length).toFixed(1) : "0";
+  const lowConf = recs.filter(r => r.progress.flags.some(f => f.type === "low_conf")).length;
+  $("stats").innerHTML = `<div class="stat"><span class="label">Records</span><b>${recs.length}</b><span class="small muted">${sharedRecs.length} shared, ${EXAMPLES.length} examples</span></div>
+    <div class="stat"><span class="label">Need review</span><b>${flagged.length}</b><span class="small muted">at least one flag</span></div>
+    <div class="stat"><span class="label">Low-confidence AI</span><b>${lowConf}</b><span class="small muted">check the diagnosis</span></div>
+    <div class="stat"><span class="label">Avg hint levels</span><b>${avgHints}</b><span class="small muted">of 3 per record</span></div>`;
+  const list = $("onlyFlagged").checked ? flagged : recs;
+  if (!selRec || !recs.find(r => r.id === selRec)) selRec = (flagged[0] || recs[0] || {}).id;
+  $("recList").innerHTML = list.map(r => {
+    const p = r.progress, pass = p.tests ? p.tests.filter(x => x.pass).length + "/" + p.tests.length : "–";
+    return `<button class="rec" data-id="${esc(r.id)}" aria-current="${r.id === selRec}">
+      <div class="top-line"><b>${esc(r.student)}</b>${r.example ? '<span class="example-tag">EXAMPLE</span>' : `<span class="small muted">${clock(r.sharedAt)}</span>`}</div>
+      <div class="small muted">${esc(r.taskTitle)} · hints ${p.hints.length}/3 · tests ${pass}</div>
+      ${p.flags.length ? `<div class="chips">${p.flags.map(f => `<span class="chip ${f.type === "low_conf" || f.type === "off_track_fix" ? "bad" : "warn"}">${esc(FLAG_LABEL[f.type] || f.type)}</span>`).join("")}</div>` : '<div class="chips"><span class="chip ok">No flags</span></div>'}
+    </button>`;
+  }).join("") || `<div class="panel small muted">No records match. Records appear here when a student presses “Share with teacher”.</div>`;
+  $("recList").querySelectorAll(".rec").forEach(b => b.onclick = () => { selRec = b.dataset.id; renderRecords(); });
+  renderRecDetail(recs.find(r => r.id === selRec));
+}
+function renderRecDetail(r) {
+  if (!r) { $("recDetail").innerHTML = ""; return; }
+  const p = r.progress, st = p.startedAt;
+  const ev = [];
+  p.hypotheses.forEach((h, i) => ev.push({ at: h.at, kind: "hyp", label: `Hypothesis ${i + 1}`, html: esc(h.text) }));
+  p.experiments.forEach((x, i) => ev.push({ at: x.at, kind: "exp", label: `Experiment ${i + 1}`, html: `<code>${esc(x.call)}</code> → <code>${esc(x.result)}</code><div class="muted">${esc(x.note)}</div>` }));
+  p.hints.forEach(h => ev.push({ at: h.at, kind: "hint", label: `Hint level ${h.level}`, html: esc(h.payload.support || h.payload.fix_lines || "") + (h.payload.confidence != null ? ` <span class="muted small">(${Math.round(h.payload.confidence * 100)}% confidence)</span>` : "") }));
+  ev.sort((a, b) => a.at - b.at);
+  const conf = p.diagnosis ? Math.round(p.diagnosis.confidence * 100) : null;
+  $("recDetail").innerHTML = `<div class="panel">
+    <div class="row" style="justify-content:space-between"><h2>${esc(r.student)} · ${esc(r.taskTitle)}</h2>${r.example ? '<span class="example-tag">EXAMPLE DATA</span>' : ""}</div>
+    ${p.flags.length ? p.flags.map(f => `<div class="notice ${f.type === "low_conf" || f.type === "off_track_fix" ? "bad" : "warn"} small"><b>${esc(FLAG_LABEL[f.type] || f.type)}.</b> ${esc(f.msg)}</div>`).join("") : '<div class="notice ok small">No guardrail flags on this record.</div>'}
+    ${p.diagnosis ? `<p class="small"><span class="label">AI diagnosis</span><br>${esc(p.diagnosis.category)} <span class="chip ${conf < 60 ? "bad" : "ok"}">${conf}% confidence</span></p>` : ""}
+    <h3>Process</h3>
+    <ol class="timeline">${ev.map(e => `<li><span class="t">${e.at ? since(e.at, st) : "–"}</span><div><div class="kind k-${e.kind}">${e.label}</div>${e.html}</div></li>`).join("") || '<li class="muted small">No steps logged.</li>'}</ol>
+    <h3>Explanation</h3><p>${p.explanation ? esc(p.explanation) : '<span class="muted">Not written</span>'}</p>
+    <div class="two">
+      <div><h3>Transfer</h3><p class="small">Prediction: ${esc(p.transfer.prediction || "–")}<br>Matched: ${esc(p.transfer.matched || "–")}<br>Principle: ${esc(p.transfer.why || "–")}</p></div>
+      <div><h3>Reflection</h3><p class="small">${[p.ref.a, p.ref.b, p.ref.c].filter(Boolean).map(esc).join("<br>") || '<span class="muted">Not written</span>'}</p></div>
+    </div>
+    ${p.revised ? `<h3>Revised code</h3><pre class="codeview">${p.revised.split("\n").map((l, i) => `<span class="ln"><i>${i + 1}</i>${esc(l) || " "}</span>`).join("")}</pre>` : ""}
+  </div>`;
+}
+function renderTaskAdmin() {
+  $("taskList").innerHTML = allTasks().map(t => `<div class="panel">
+    <div class="row" style="justify-content:space-between"><h3>${esc(t.title)}</h3><span class="chip ${t.preset ? "info" : "ok"}">${t.preset ? "sample" : "yours"}</span></div>
+    <p class="small muted">${esc(t.problem)}</p>
+    <div class="row"><span class="small">Task code <code>${esc(t.id)}</code></span>
+      <button class="btn ghost small" data-copy="${esc(t.id)}">Copy task link</button>
+      <button class="btn ghost small" data-open="${esc(t.id)}">Open as student</button>
+      ${t.preset ? "" : `<button class="btn ghost small" data-del="${esc(t.id)}">Delete</button>`}</div>
+  </div>`).join("");
+  $("taskList").querySelectorAll("[data-copy]").forEach(b => b.onclick = async () => {
+    const link = location.href.split("#")[0] + "#" + b.dataset.copy;
+    try { await navigator.clipboard.writeText(link); toast("Task link copied"); } catch (e) { toast("Task code: " + b.dataset.copy); }
+  });
+  $("taskList").querySelectorAll("[data-open]").forEach(b => b.onclick = () => { setRole("student"); switchTask(b.dataset.open); window.scrollTo(0, 0); });
+  $("taskList").querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
+    if (b.dataset.armed) { customTasks = customTasks.filter(t => t.id !== b.dataset.del); store.set(K.tasks, customTasks); if (curTaskId === b.dataset.del) curTaskId = PRESETS[0].id; renderTaskAdmin(); return; }
+    b.dataset.armed = "1"; b.textContent = "Click again to delete";
+  });
+}
+function parseTests(src) {
+  const out = [], bad = [];
+  src.split("\n").map(s => s.trim()).filter(Boolean).forEach(line => {
+    const i = line.lastIndexOf("=>");
+    if (i < 0) { bad.push(line); return; }
+    const call = line.slice(0, i).trim(), raw = line.slice(i + 2).trim();
+    try { out.push({ call, expect: JSON.parse(raw) }); } catch (e) { bad.push(line); }
+  });
+  return { out, bad };
+}
+$("taskForm").onsubmit = async e => {
+  e.preventDefault();
+  const title = $("tfTitle").value.trim(), code = $("tfCode").value;
+  const { out: tests, bad } = parseTests($("tfTests").value);
+  if (bad.length) { $("tfMsg").textContent = `Couldn’t read: ${bad[0]}. Use call => expected, with strings in "double quotes".`; return; }
+  if (!tests.length) { $("tfMsg").textContent = "Add at least one test so students can check their fix."; return; }
+  const id = (title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "task") + "-" + Date.now().toString(36).slice(-4);
+  const t = { id, title, preset: false, problem: $("tfProblem").value.trim(), instructions: $("tfInstr").value.trim(), expected: $("tfExpected").value.trim(),
+    criteria: $("tfCriteria").value.split("\n").map(s => s.trim()).filter(Boolean), code, tests, demoCall: tests[0].call, demoExpect: tests[0].expect };
+  const r = await runCode(code, t.demoCall);
+  if (r.ok && r.value === fmt(t.demoExpect)) { $("tfMsg").textContent = "The first test already passes on the buggy code. Put a failing test first so students see the bug."; return; }
+  customTasks.push(t); store.set(K.tasks, customTasks);
+  e.target.reset(); $("tfMsg").textContent = `Created. Task code: ${id}`; renderTaskAdmin(); renderTaskSelect();
+};
+$("tabRecords").onclick = () => { tTab = "records"; renderTeacher(); };
+$("tabTasks").onclick = () => { tTab = "tasks"; renderTeacher(); };
+$("onlyFlagged").onchange = renderRecords;
+
+/* ---------------- role switch ---------------- */
+function setRole(role) {
+  $("roleStudent").setAttribute("aria-pressed", role === "student");
+  $("roleTeacher").setAttribute("aria-pressed", role === "teacher");
+  $("studentView").hidden = role !== "student"; $("teacherView").hidden = role !== "teacher";
+  if (role === "teacher") { sharedRecs = store.get(K.recs, sharedRecs); renderTeacher(); }
+}
+$("roleStudent").onclick = () => setRole("student");
+$("roleTeacher").onclick = () => setRole("teacher");
+if (location.hash === "#teacher") setRole("teacher");
+
+renderAll(); renderFailure();
+setTimeout(() => { if (aiState === "connecting") setAi(sample ? "live" : "demo"); }, 11000);
+})();
+</script>
+
+</body></html>
