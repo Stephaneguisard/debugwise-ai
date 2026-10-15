@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DebugWise AI</title>
+<meta name="description" content="Debug Python by diagnosing it yourself. DebugWise AI asks for your hypothesis, runs your experiments in the browser, and gives help one level at a time.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232550A0'/%3E%3Cpath d='M9 11l-5 5 5 5M23 11l5 5-5 5M18 8l-4 16' stroke='%23F3D75E' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+{{STYLE}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><h1><span>DebugWise</span> AI</h1><small>diagnose first, fix second</small></div>
+    <div class="seg" role="group" aria-label="View as">
+      <button id="roleStudent" aria-pressed="true">Student</button>
+      <button id="roleTeacher" aria-pressed="false">Teacher</button>
+    </div>
+    <span class="pill" id="pyPill"><span class="dot"></span><span id="pyPillText">Starting Python…</span></span>
+    <button class="pill btn-pill" id="aiPill" title="Open AI settings"><span class="dot"></span><span id="aiPillText">Built-in diagnosis</span></button>
+  </div>
+</header>
+
+<div class="wrap" id="introWrap">
+  <div class="intro" id="intro" hidden>
+    <div>
+      <b>How DebugWise works.</b> Pick a Python task (or paste your own). Write a hypothesis, run a small experiment, and only then unlock the next hint.
+      Everything runs in your browser. Nothing is uploaded unless you choose to share a learning record.
+    </div>
+    <button class="btn ghost" id="introClose">Got it</button>
+  </div>
+</div>
+
+<!-- ============ STUDENT VIEW ============ -->
+<main id="studentView" class="wrap">
+  <div class="taskbar">
+    <label class="label" for="taskSel">Task</label>
+    <select id="taskSel"></select>
+    <button class="btn" id="ownBtn">Debug my own code</button>
+    <button class="btn ghost small" id="resetTask">Start over</button>
+    <nav class="steps" id="steps" aria-label="Progress"></nav>
+  </div>
+
+  <form class="panel" id="ownPanel" hidden autocomplete="off">
+    <h2>Debug my own Python code</h2>
+    <p class="small muted">Paste a program that does not behave the way you expect. Add at least one test line that shows the wrong behaviour, or leave tests empty if the program crashes when you run it.</p>
+    <label class="field"><span>What should the program do?</span><textarea id="ownProblem" required placeholder="e.g. total_price(items) adds up the prices in a shopping cart."></textarea></label>
+    <label class="field"><span>Your code</span><textarea id="ownCode" class="code" required spellcheck="false" placeholder="def total_price(items):&#10;    ..." style="min-height:180px"></textarea></label>
+    <label class="field"><span>Tests (optional): one per line, <code>call =&gt; expected value</code></span><textarea id="ownTests" class="code" spellcheck="false" style="min-height:70px" placeholder='total_price([2, 3.5]) => 5.5'></textarea></label>
+    <label class="field"><span>Input for input() (optional): one line per answer</span><textarea id="ownStdin" class="code" spellcheck="false" style="min-height:50px"></textarea></label>
+    <div class="row"><button class="btn primary" type="submit">Start debugging</button><button class="btn" type="button" id="ownCancel">Cancel</button><span class="small muted" id="ownMsg"></span></div>
+  </form>
+
+  <div class="grid">
+    <aside class="evidence" aria-label="Evidence">
+      <section class="panel brief" id="brief"></section>
+      <section class="panel">
+        <div class="row" style="justify-content:space-between"><h3>Original code</h3><span class="chip info">read-only · always visible</span></div>
+        <pre class="codeview" id="origCode"></pre>
+      </section>
+      <section class="panel">
+        <h3>Observed failure</h3>
+        <pre class="term" id="failOut">Starting Python…</pre>
+      </section>
+    </aside>
+
+    <div class="flow">
+      <section class="step" id="s1">
+        <header><span class="num">Step 1</span><h2>Write your hypothesis</h2>
+          <p>Before asking for help, say what you think is wrong and why. Use the pattern “I think the bug is … because …”. You need a new hypothesis before each hint.</p></header>
+        <label class="field"><span>Your hypothesis</span>
+          <textarea id="hypText" placeholder="I think the bug is on line … because when the loop runs, the variable … has the value …"></textarea></label>
+        <div class="row"><button class="btn primary" id="hypSave">Save hypothesis</button><span class="small muted" id="hypMsg"></span></div>
+        <ol class="log" id="hypList"></ol>
+      </section>
+
+      <section class="step" id="s2">
+        <header><span class="num">Step 2</span><h2>Run a small experiment</h2>
+          <p>Call the function with an input you choose, predict the result, then note what the result tells you. Add <code>print(…)</code> to your revision to trace values.</p></header>
+        <div class="row">
+          <label class="field" style="flex:0 0 auto"><span>Run against</span>
+            <select id="expTarget"><option value="orig">Original code</option><option value="rev">My revision</option></select></label>
+          <label class="field grow"><span>Call (leave empty to just run the program)</span><input type="text" id="expCall" class="mono" spellcheck="false" autocomplete="off"></label>
+        </div>
+        <label class="field"><span>I expect the result to be…</span><input type="text" id="expExpect" placeholder="e.g. 90, or an error" autocomplete="off"></label>
+        <details class="small"><summary>Input for input() (optional)</summary><textarea id="expStdin" class="code" spellcheck="false" style="min-height:50px;margin-top:6px" placeholder="one line per answer"></textarea></details>
+        <div class="row"><button class="btn" id="expRun">Run experiment</button></div>
+        <pre class="term" id="expOut" hidden></pre>
+        <div id="expNoteWrap" hidden class="field">
+          <label class="field"><span>What does this result tell you?</span>
+            <textarea id="expNote" placeholder="The result was … which means …"></textarea></label>
+          <div class="row"><button class="btn primary" id="expLog">Log experiment</button><span class="small muted" id="expMsg"></span></div>
+        </div>
+        <ol class="log" id="expList"></ol>
+      </section>
+
+      <section class="step" id="s3">
+        <header><span class="num">Step 3</span><h2>Support ladder</h2>
+          <p>Help comes one level at a time. Each level unlocks after a new hypothesis and a new logged experiment. DebugWise will not rewrite your program.</p></header>
+        <div class="ladder" id="ladder"></div>
+        <div class="panel askbox" id="askBox">
+          <h3>Ask a follow-up question</h3>
+          <p class="small muted" id="askNote"></p>
+          <textarea id="askText" placeholder="e.g. Why does Python allow a list index of 3 when there are only three items?"></textarea>
+          <div class="row"><button class="btn" id="askBtn">Ask DebugWise</button><span class="small muted" id="askMsg"></span></div>
+          <div id="askList"></div>
+        </div>
+      </section>
+
+      <section class="step" id="s4">
+        <header><span class="num">Step 4</span><h2>Revise and test</h2>
+          <p>Edit your copy of the code. The original stays on the left so you can compare.</p></header>
+        <textarea class="code" id="revCode" spellcheck="false" aria-label="Revised code"></textarea>
+        <div class="row"><button class="btn primary" id="runTests">Run tests</button><button class="btn ghost" id="revReset">Reset to original</button><span class="small muted" id="testSummary"></span></div>
+        <div class="scroll-x" id="testOut"></div>
+      </section>
+
+      <section class="step" id="s5">
+        <header><span class="num">Step 5</span><h2>Explain the bug in your own words</h2>
+          <p>Why did the original program fail? Describe what was happening to the program’s state, not only what you changed.</p></header>
+        <textarea id="explText" placeholder="The original failed because … When the program ran, … had the value … so …"></textarea>
+        <div class="row"><button class="btn" id="explCheck">Get feedback on my explanation</button><span class="small muted" id="explMsg"></span></div>
+        <div id="explFb"></div>
+      </section>
+
+      <section class="step" id="s6">
+        <header><span class="num">Step 6</span><h2>Transfer: same principle, new code</h2>
+          <p>Predict what this new code does before you run it, then say which debugging principle applies.</p></header>
+        <div id="transferBody"></div>
+      </section>
+
+      <section class="step" id="s7">
+        <header><span class="num">Step 7</span><h2>Reflect</h2></header>
+        <label class="field"><span>What was your first guess, and how did your experiments change it?</span><textarea id="ref1"></textarea></label>
+        <label class="field"><span>Which hint level did you need, and could you have found the bug without it?</span><textarea id="ref2"></textarea></label>
+        <label class="field"><span>What will you check first next time you see a similar bug?</span><textarea id="ref3"></textarea></label>
+      </section>
+
+      <section class="step" id="s8">
+        <header><span class="num">Record</span><h2>Learning record</h2>
+          <p>Your hypotheses, experiments, hints, revision and reflection in one place. Share it with your teacher with a link, or keep a copy.</p></header>
+        <div id="recordSummary"></div>
+        <label class="field" style="max-width:320px"><span>Your name</span><input type="text" id="studentName" placeholder="Full name" autocomplete="name"></label>
+        <label class="field" id="classRow" hidden style="max-width:320px"><span>Class code from your teacher (optional)</span><input type="text" id="classCode" placeholder="e.g. K7M2QX" maxlength="12" autocomplete="off" style="text-transform:uppercase"></label>
+        <div class="row">
+          <button class="btn primary" id="shareRec">Create share link</button>
+          <button class="btn" id="copyRec">Copy as text</button>
+          <button class="btn" id="dlRec">Download (.md)</button>
+          <button class="btn" id="dlJson">Download (.json)</button>
+        </div>
+        <span class="small muted" id="shareMsg"></span>
+        <textarea id="recFallback" hidden readonly class="code" style="min-height:90px"></textarea>
+      </section>
+    </div>
+  </div>
+</main>
+
+<!-- ============ TEACHER VIEW ============ -->
+<main id="teacherView" class="wrap" hidden>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tabRecords" aria-selected="true">Learning records</button>
+    <button role="tab" id="tabTasks" aria-selected="false">Assignments</button>
+  </div>
+
+  <div class="panel" id="authBox" hidden style="margin-bottom:16px">
+    <div id="authIn">
+      <h3>Teacher account</h3>
+      <p class="small muted">Sign in to see records your students submit with your class code. Records are stored on the server.</p>
+      <div class="row">
+        <input type="email" id="authEmail" placeholder="Email" autocomplete="username">
+        <input type="password" id="authPass" placeholder="Password (8+ characters)" autocomplete="current-password">
+        <input type="text" id="authInvite" placeholder="Invite code" hidden>
+        <button class="btn primary" id="authLogin">Sign in</button>
+        <button class="btn" id="authRegister">Create account</button>
+      </div>
+      <span class="small muted" id="authMsg"></span>
+    </div>
+    <div id="authOut" hidden>
+      <div class="row" style="justify-content:space-between">
+        <div><b id="authWho"></b> &middot; class code <b id="authCode" class="mono" style="font-size:1.1rem;letter-spacing:.08em"></b>
+          <div class="small muted">Give this code to students. They enter it when they share their learning record.</div></div>
+        <div class="row"><button class="btn" id="authRefresh">Refresh</button><button class="btn ghost" id="authLogout">Sign out</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="paneRecords">
+    <div class="stats" id="stats"></div>
+    <div class="panel" style="margin-bottom:16px">
+      <h3>Open a student record</h3>
+      <p class="small muted">Students send you a share link or a .json file. Paste the link here, or choose the file. Records stay in this browser.</p>
+      <div class="row"><input type="text" id="recPaste" class="grow" placeholder="Paste a record link or JSON" autocomplete="off"><button class="btn primary" id="recOpen">Open</button>
+        <label class="btn" for="recFile">Choose file(s)</label><input type="file" id="recFile" accept=".json,application/json" multiple hidden></div>
+      <span class="small muted" id="recMsg"></span>
+    </div>
+    <div class="tgrid">
+      <div>
+        <div class="row" style="justify-content:space-between;margin-bottom:8px">
+          <span class="label">Records</span>
+          <label class="small row" style="gap:6px"><input type="checkbox" id="onlyFlagged"> Flagged only</label>
+        </div>
+        <div class="reclist" id="recList"></div>
+      </div>
+      <div id="recDetail"></div>
+    </div>
+  </div>
+
+  <div id="paneTasks" hidden>
+    <div class="tgrid">
+      <div class="reclist" id="taskList"></div>
+      <form class="panel" id="taskForm" autocomplete="off">
+        <h2>New assignment</h2>
+        <p class="small muted">You get a link to give students. The task is stored inside the link, so no account or server is needed. Code runs as Python in the student's browser.</p>
+        <label class="field"><span>Title</span><input type="text" id="tfTitle" required placeholder="e.g. Shopping cart total"></label>
+        <label class="field"><span>Problem</span><textarea id="tfProblem" required placeholder="What the program is supposed to do."></textarea></label>
+        <label class="field"><span>Instructions</span><textarea id="tfInstr" placeholder="What students should do and submit."></textarea></label>
+        <label class="field"><span>Expected behaviour</span><input type="text" id="tfExpected" placeholder="e.g. cart_total([2, 3.5]) returns 5.5"></label>
+        <label class="field"><span>Assessment criteria (one per line)</span><textarea id="tfCriteria" placeholder="Hypothesis names the faulty state&#10;Explanation describes why the original failed"></textarea></label>
+        <label class="field"><span>Buggy Python code</span><textarea id="tfCode" class="code" required spellcheck="false" style="min-height:170px"></textarea></label>
+        <label class="field"><span>Tests (one per line: <code>call =&gt; expected value</code>, written in Python)</span><textarea id="tfTests" class="code" spellcheck="false" style="min-height:90px" placeholder='cart_total([2, 3.5]) => 5.5&#10;cart_total([]) => 0'></textarea></label>
+        <div class="row"><button class="btn primary" type="submit">Create assignment</button><span class="small muted" id="tfMsg"></span></div>
+      </form>
+    </div>
+  </div>
+</main>
+
+<footer class="wrap foot">
+  <span>DebugWise AI is a learning-design prototype. Python runs in your browser with Pyodide; your code is not sent to any server. If your teacher gave you a class code, only the learning record you choose to share is sent to the class server.</span>
+</footer>
+
+<dialog id="aiDialog">
+  <form method="dialog" class="dlg" id="aiForm">
+    <h2>AI settings</h2>
+    <p><b>Built-in diagnosis (default).</b> A rule-based Python analyser reads your code, the error and your hypothesis, and gives hints at three levels. It needs no account and works offline. It recognises common beginner bugs; for anything else it says so and flags low confidence.</p>
+    <p><b>Claude (optional).</b> Add your own Anthropic API key to get diagnoses and follow-up answers for any code. The key is saved only in this browser and is sent only to api.anthropic.com. Use a key with a spending limit, and do not enter it on a shared computer.</p>
+    <label class="field"><span>Anthropic API key</span><input type="password" id="aiKey" placeholder="sk-ant-…" autocomplete="off" spellcheck="false"></label>
+    <label class="field"><span>Model</span>
+      <select id="aiModel"><option value="claude-sonnet-5-5">Claude Sonnet 5.5 (balanced)</option><option value="claude-haiku-5-5">Claude Haiku 5.5 (fastest)</option><option value="claude-opus-5-5">Claude Opus 5.5 (most capable)</option></select></label>
+    <div class="row"><button class="btn primary" value="save" id="aiSave">Save</button><button class="btn" value="remove" id="aiRemove" type="button">Remove key</button><button class="btn ghost" value="cancel">Close</button></div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const ENGINE_PY = {{ENGINE_JSON}};
+{{APP_JS}}
+</script>
+</body>
+</html>

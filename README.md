@@ -38,6 +38,10 @@ cp dist/index.html .    # 根目录 index.html 即线上版本
 
 仅需 Python 3 标准库。GitHub Pages 设置:Source = `main` 分支根目录(仓库含 `.nojekyll`)。本地预览请用 `python3 -m http.server`,因为 Worker 通过 Blob URL 创建,`file://` 下部分浏览器会受限。
 
+## 带后端的版本(`pro/`)
+
+`pro/` 是 DebugWise Pro:在本仓库纯前端版本的基础上增加教师账号、班级码、服务器集中收集学习记录和服务器端 Claude 代理(FastAPI + SQLite)。线上 GitHub Pages 仍然只托管根目录的 `index.html`,不受 `pro/` 影响。运行和部署见 [pro/README.md](pro/README.md)。
+
 ## 文档
 
 详见 [docs/TECHNICAL.md](docs/TECHNICAL.md)。
